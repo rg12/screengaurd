@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# PyInstaller build artifacts (rebuild with the command in README.md)
+build/
+dist/
+
+# Machine-specific launcher — regenerate with create_shortcut.py
+*.lnk
+
+# Local agent/editor state
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store

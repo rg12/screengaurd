@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Assistant">
+<meta name="theme-color" content="#101317">
+<title>Conversation Assistant</title>
+<style>
+  :root {
+    --bg: #101317;
+    --panel: #171b21;
+    --panel-2: #1e242c;
+    --line: #2a323d;
+    --text: #e8edf3;
+    --muted: #94a1b2;
+    --accent: #3ba3b8;
+    --danger: #d9534f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-text-size-adjust: 100%;
+  }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; flex: 1; font-weight: 600; }
+  button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  button:active { opacity: .7; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06222a; font-weight: 650; }
+  button.stop { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 650; }
+  main { flex: 1; overflow-y: auto; padding: 12px 14px 0; -webkit-overflow-scrolling: touch; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .seg { display: flex; width: 100%; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 9px 6px; font-size: 13px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #06222a; font-weight: 650; }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 2px 0; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; margin: 12px 2px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: #43c07a; }
+  .dot.err  { background: var(--danger); }
+  section { margin-bottom: 14px; }
+  h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px 2px; }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-height: 58px; }
+  .caption { color: var(--muted); font-style: italic; }
+  .line { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .line:last-child { border-bottom: 0; }
+  .reply { background: var(--panel-2); border-radius: 9px; padding: 9px 11px; margin-bottom: 8px; white-space: pre-wrap; }
+  .reply:last-child { margin-bottom: 0; }
+  footer { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); }
+  footer button { width: 100%; padding: 13px; font-size: 16px; }
+  dialog {
+    width: min(92vw, 420px); background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; }
+  input {
+    width: 100%; font: inherit; padding: 10px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+  .err { color: #ff9a96; font-size: 13px; margin: 10px 2px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Conversation Assistant</h1>
+  <button id="clearBtn" title="Clear">Clear</button>
+  <button id="keysBtn" title="API keys">Keys</button>
+</header>
+
+<main>
+  <section>
+    <div class="seg" role="group" aria-label="Audio source">
+      <button id="srcMic" aria-pressed="true">Microphone</button>
+      <button id="srcSpk" aria-pressed="false">Speakerphone</button>
+    </div>
+    <p class="hint" id="srcHint"></p>
+  </section>
+
+  <div class="status"><span class="dot" id="dot"></span><span id="status">Add your API keys, then start listening.</span></div>
+  <p class="err" id="error" hidden></p>
+
+  <section>
+    <h2>Live transcript</h2>
+    <div class="pane">
+      <div id="caption" class="caption"></div>
+      <div id="transcript"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Suggested reply</h2>
+    <div class="pane" id="replies"></div>
+  </section>
+</main>
+
+<footer>
+  <button id="toggle" class="primary">Start listening</button>
+</footer>
+
+<dialog id="keysDlg">
+  <strong>API keys</strong>
+  <label for="dgKey">Deepgram API key — speech to text</label>
+  <input id="dgKey" type="password" autocomplete="off" placeholder="…">
+  <label for="anKey">Anthropic API key — suggested replies</label>
+  <input id="anKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+  <p class="hint">Stored only in this browser's local storage on this device.</p>
+  <div class="row" style="margin-top:14px; justify-content:flex-end">
+    <button id="keysCancel">Cancel</button>
+    <button id="keysSave" class="primary">Save</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+const SYSTEM_PROMPT =
+  "You are a real-time conversation assistant. Preserve the intended meaning, silently " +
+  "translate non-English input into English, and propose a polite, useful reply. " +
+  "Never claim the user said something that is not in the transcript. Reply in clear, " +
+  "natural English with only one or two concise sentences and no preamble.";
+
+const SOURCE_HINTS = {
+  mic: "Captures the device microphone — good for in-person conversations.",
+  spk: "Put the call on speaker. The mic then hears both sides. iOS gives no app direct access to call audio.",
+};
+
+const el = (id) => document.getElementById(id);
+const ui = {
+  status: el("status"), dot: el("dot"), error: el("error"),
+  caption: el("caption"), transcript: el("transcript"), replies: el("replies"),
+  toggle: el("toggle"), srcHint: el("srcHint"),
+  srcMic: el("srcMic"), srcSpk: el("srcSpk"),
+};
+
+const state = {
+  listening: false,
+  source: "mic",
+  history: [],     // trailing conversation window sent to Claude
+  ws: null,
+  ctx: null,
+  stream: null,
+  node: null,
+  replyAbort: null,
+};
+
+/* ---------- small helpers ---------- */
+
+function setStatus(text, kind) {
+  ui.status.textContent = text;
+  ui.dot.className = "dot" + (kind ? " " + kind : "");
+}
+
+function showError(message) {
+  ui.error.textContent = message;
+  ui.error.hidden = !message;
+}
+
+function keys() {
+  return {
+    deepgram: localStorage.getItem("deepgram_api_key") || "",
+    anthropic: localStorage.getItem("anthropic_api_key") || "",
+  };
+}
+
+function addTranscript(text) {
+  const div = document.createElement("div");
+  div.className = "line";
+  div.textContent = text;
+  ui.transcript.prepend(div);
+}
+
+/* ---------- audio capture ---------- */
+
+// Deliberately disables echoCancellation: it is designed to remove speaker output
+// from the mic signal, which is exactly the far-end voice we want in speakerphone mode.
+async function openMicrophone() {
+  const constraints = {
+    audio: {
+      echoCancellation: state.source !== "spk",
+      noiseSuppression: state.source !== "spk",
+      autoGainControl: true,
+      channelCount: 1,
+    },
+  };
+  return navigator.mediaDevices.getUserMedia(constraints);
+}
+
+const WORKLET_SOURCE = `
+class PCMTap extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0]) {
+      const channel = input[0];
+      const pcm = new Int16Array(channel.length);
+      for (let i = 0; i < channel.length; i++) {
+        const s = Math.max(-1, Math.min(1, channel[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      this.port.postMessage(pcm, [pcm.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-tap', PCMTap);
+`;
+
+async function startCapture(onPCM) {
+  state.stream = await openMicrophone();
+
+  // Asking for 16 kHz avoids resampling by hand; Safari may ignore it, so the
+  // real ctx.sampleRate is what gets reported to Deepgram.
+  state.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  if (state.ctx.state === "suspended") await state.ctx.resume();
+
+  const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
+  await state.ctx.audioWorklet.addModule(URL.createObjectURL(blob));
+
+  const source = state.ctx.createMediaStreamSource(state.stream);
+  state.node = new AudioWorkletNode(state.ctx, "pcm-tap");
+  state.node.port.onmessage = (event) => onPCM(event.data);
+  source.connect(state.node);
+
+  // A worklet with no downstream connection is not pulled on by the graph in
+  // Safari, so terminate into a muted gain node to keep it running.
+  const sink = state.ctx.createGain();
+  sink.gain.value = 0;
+  state.node.connect(sink).connect(state.ctx.destination);
+
+  return state.ctx.sampleRate;
+}
+
+function stopCapture() {
+  if (state.node) { state.node.port.onmessage = null; state.node.disconnect(); state.node = null; }
+  if (state.stream) { state.stream.getTracks().forEach((t) => t.stop()); state.stream = null; }
+  if (state.ctx) { state.ctx.close().catch(() => {}); state.ctx = null; }
+}
+
+/* ---------- deepgram ---------- */
+
+function connectDeepgram(apiKey, sampleRate) {
+  const params = new URLSearchParams({
+    model: "nova-3",
+    language: "multi",
+    encoding: "linear16",
+    sample_rate: String(Math.round(sampleRate)),
+    channels: "1",
+    interim_results: "true",
+    punctuate: "true",
+    endpointing: "300",
+  });
+
+  // Browsers cannot set WebSocket headers; Deepgram accepts the key as a subprotocol.
+  const ws = new WebSocket("wss://api.deepgram.com/v1/listen?" + params, ["token", apiKey]);
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => setStatus("Listening…", "live");
+
+  ws.onmessage = (event) => {
+    let payload;
+    try { payload = JSON.parse(event.data); } catch { return; }
+    const alt = payload.channel && payload.channel.alternatives && payload.channel.alternatives[0];
+    const text = alt && alt.transcript ? alt.transcript.trim() : "";
+    if (!text) return;
+
+    if (payload.is_final) {
+      ui.caption.textContent = "";
+      addTranscript(text);
+      requestReply(text);
+    } else {
+      ui.caption.textContent = text;
+    }
+  };
+
+  ws.onerror = () => showError("Deepgram connection failed — check the API key and your network.");
+  ws.onclose = (event) => {
+    if (state.listening && event.code !== 1000) {
+      showError("Deepgram closed the connection (code " + event.code + ").");
+      stop();
+    }
+  };
+
+  return ws;
+}
+
+/* ---------- claude ---------- */
+
+async function requestReply(utterance) {
+  const { anthropic } = keys();
+  if (!anthropic) { setStatus("Add an Anthropic key to get replies.", "live"); return; }
+
+  if (state.replyAbort) state.replyAbort.abort();
+  const controller = new AbortController();
+  state.replyAbort = controller;
+
+  const bubble = document.createElement("div");
+  bubble.className = "reply";
+  ui.replies.prepend(bubble);
+  setStatus("Generating a reply…", "live");
+
+  const messages = state.history.concat([
+    { role: "user", content: "The other person just said:\n" + utterance },
+  ]);
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": anthropic,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 160,
+        stream: true,
+        system: SYSTEM_PROMPT,
+        messages,
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error("Anthropic " + response.status + ": " + detail.slice(0, 200));
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let full = "";
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "[DONE]") continue;
+        let event;
+        try { event = JSON.parse(raw); } catch { continue; }
+        if (event.type === "content_block_delta" && event.delta && event.delta.text) {
+          full += event.delta.text;
+          bubble.textContent = full;   // streams in as it is generated
+        }
+      }
+    }
+
+    if (full.trim()) {
+      state.history.push({ role: "user", content: utterance });
+      state.history.push({ role: "assistant", content: full.trim() });
+      state.history = state.history.slice(-8);
+      setStatus("Ready for the next sentence.", "live");
+    } else {
+      bubble.remove();
+    }
+  } catch (error) {
+    if (error.name === "AbortError") { bubble.remove(); return; }
+    bubble.remove();
+    showError(error.message);
+    setStatus("Reply failed.", "err");
+  }
+}
+
+/* ---------- lifecycle ---------- */
+
+async function start() {
+  showError("");
+  const { deepgram } = keys();
+  if (!deepgram) { showError("Add your Deepgram API key first (Keys button)."); return; }
+
+  ui.toggle.disabled = true;
+  setStatus("Requesting microphone…");
+
+  try {
+    const sampleRate = await startCapture((pcm) => {
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(pcm);
+    });
+    state.ws = connectDeepgram(deepgram, sampleRate);
+    state.listening = true;
+    ui.toggle.textContent = "Stop listening";
+    ui.toggle.className = "stop";
+    setStatus("Connecting to Deepgram…", "live");
+  } catch (error) {
+    stopCapture();
+    showError(
+      error.name === "NotAllowedError"
+        ? "Microphone access was blocked. Allow it in Safari settings for this site."
+        : error.message
+    );
+    setStatus("Could not start.", "err");
+  } finally {
+    ui.toggle.disabled = false;
+  }
+}
+
+function stop() {
+  state.listening = false;
+  if (state.replyAbort) { state.replyAbort.abort(); state.replyAbort = null; }
+  if (state.ws) {
+    if (state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: "CloseStream" }));
+      state.ws.close(1000);
+    }
+    state.ws = null;
+  }
+  stopCapture();
+  ui.caption.textContent = "";
+  ui.toggle.textContent = "Start listening";
+  ui.toggle.className = "primary";
+  setStatus("Stopped.");
+}
+
+/* ---------- wiring ---------- */
+
+function selectSource(source) {
+  state.source = source;
+  ui.srcMic.setAttribute("aria-pressed", String(source === "mic"));
+  ui.srcSpk.setAttribute("aria-pressed", String(source === "spk"));
+  ui.srcHint.textContent = SOURCE_HINTS[source];
+}
+
+ui.srcMic.onclick = () => { if (!state.listening) selectSource("mic"); };
+ui.srcSpk.onclick = () => { if (!state.listening) selectSource("spk"); };
+ui.toggle.onclick = () => (state.listening ? stop() : start());
+
+el("clearBtn").onclick = () => {
+  ui.transcript.innerHTML = "";
+  ui.replies.innerHTML = "";
+  ui.caption.textContent = "";
+  state.history = [];
+};
+
+const dlg = el("keysDlg");
+el("keysBtn").onclick = () => {
+  const stored = keys();
+  el("dgKey").value = stored.deepgram;
+  el("anKey").value = stored.anthropic;
+  dlg.showModal();
+};
+el("keysCancel").onclick = () => dlg.close();
+el("keysSave").onclick = () => {
+  localStorage.setItem("deepgram_api_key", el("dgKey").value.trim());
+  localStorage.setItem("anthropic_api_key", el("anKey").value.trim());
+  dlg.close();
+  setStatus("Keys saved. Ready to listen.");
+};
+
+// Safari suspends capture when the page goes to the background.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state.listening) {
+    setStatus("Paused — iOS stops capture when this page is not in front.", "err");
+  }
+});
+
+selectSource("mic");
+if (!keys().deepgram) setStatus("Add your API keys, then start listening.");
+else setStatus("Ready to listen.");
+</script>
+</body>
+</html>
