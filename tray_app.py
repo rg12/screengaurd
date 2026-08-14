@@ -168,6 +168,7 @@ class HelloWorldApp:
         self.stop_transcription_event = None
         self.response_queue = queue.Queue()
         self.response_history = []
+        self._protected_hwnds = set()  # combobox popdowns / dialogs that need their own capture exclusion
         self._anthropic_client = None
         self._anthropic_client_key = None
 
@@ -236,26 +237,30 @@ class HelloWorldApp:
         tk.Label(source_frame, text="Audio source").pack(side="left")
         self.audio_source_var = tk.StringVar(value=self.audio_source)
         self.audio_source_var.trace_add("write", self._on_audio_source_changed)
-        ttk.Combobox(
+        audio_source_combo = ttk.Combobox(
             source_frame,
             textvariable=self.audio_source_var,
             values=("System audio (online call)", "Microphone"),
             state="readonly",
             width=25,
-        ).pack(side="right")
+        )
+        audio_source_combo.pack(side="right")
+        self._protect_combobox_popdown(audio_source_combo)
 
         transcription_frame = tk.Frame(speech_frame)
         transcription_frame.pack(fill="x", padx=8, pady=(0, 4))
         tk.Label(transcription_frame, text="Transcription").pack(side="left")
         self.transcription_provider_var = tk.StringVar(value=self.transcription_provider)
         self.transcription_provider_var.trace_add("write", self._on_transcription_provider_changed)
-        ttk.Combobox(
+        transcription_combo = ttk.Combobox(
             transcription_frame,
             textvariable=self.transcription_provider_var,
             values=("Deepgram", "GPT (5-second chunks)"),
             state="readonly",
             width=25,
-        ).pack(side="right")
+        )
+        transcription_combo.pack(side="right")
+        self._protect_combobox_popdown(transcription_combo)
 
         self.transcribe_button = tk.Button(
             speech_frame,
@@ -280,13 +285,15 @@ class HelloWorldApp:
         tk.Label(response_provider_frame, text="Response provider").pack(side="left")
         self.response_provider_var = tk.StringVar(value=self.response_provider)
         self.response_provider_var.trace_add("write", self._on_response_provider_changed)
-        ttk.Combobox(
+        response_provider_combo = ttk.Combobox(
             response_provider_frame,
             textvariable=self.response_provider_var,
             values=("Claude", "Gemini", "GPT"),
             state="readonly",
             width=20,
-        ).pack(side="right")
+        )
+        response_provider_combo.pack(side="right")
+        self._protect_combobox_popdown(response_provider_combo)
         tk.Label(
             response_frame,
             textvariable=self.response_status_var,
@@ -312,14 +319,42 @@ class HelloWorldApp:
         hwnd = ctypes.windll.user32.GetAncestor(raw, GA_ROOT)
         return hwnd or raw
 
-    def _set_capture_protection(self, enabled=True):
-        """Excludes the window from screen capture/sharing APIs."""
+    def _set_capture_protection(self, enabled=True, hwnd=None):
+        """Excludes a window from screen capture/sharing APIs. Defaults to the
+        main window, but accepts other top-level HWNDs (dropdown popdowns,
+        dialogs) since display affinity is per-window, not inherited."""
         try:
-            hwnd = self._get_hwnd()
+            target_hwnd = hwnd if hwnd is not None else self._get_hwnd()
             affinity = WDA_EXCLUDEFROMCAPTURE if enabled else WDA_NONE
-            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, affinity)
+            ctypes.windll.user32.SetWindowDisplayAffinity(target_hwnd, affinity)
         except Exception:
             pass
+
+    def _hwnd_from_widget(self, widget):
+        raw = widget.winfo_id()
+        hwnd = ctypes.windll.user32.GetAncestor(raw, GA_ROOT)
+        return hwnd or raw
+
+    def _protect_extra_window(self, hwnd):
+        """Track a non-main top-level window (dialog, combobox popdown) so
+        privacy mode toggles keep it in sync with the main window."""
+        self._protected_hwnds.add(hwnd)
+        self._set_capture_protection(self.privacy_mode, hwnd=hwnd)
+
+    def _protect_combobox_popdown(self, combobox):
+        """A ttk.Combobox's dropdown list renders in its own top-level Tk
+        window (not a child of the main window), so it needs its own capture
+        exclusion or it shows up in a screen share even with privacy mode on."""
+        def _apply():
+            try:
+                popdown = combobox.tk.call("ttk::combobox::PopdownWindow", combobox)
+                raw_id = int(str(combobox.tk.call("winfo", "id", popdown)), 0)
+                hwnd = ctypes.windll.user32.GetAncestor(raw_id, GA_ROOT) or raw_id
+                self._protect_extra_window(hwnd)
+            except Exception:
+                pass
+
+        self.root.after(0, _apply)
 
     def _apply_click_through(self):
         hwnd = self._get_hwnd()
@@ -767,6 +802,8 @@ class HelloWorldApp:
         self.show_in_taskbar = not self.privacy_mode
         self._apply_taskbar_setting()
         self._set_capture_protection(self.privacy_mode)
+        for hwnd in list(self._protected_hwnds):
+            self._set_capture_protection(self.privacy_mode, hwnd=hwnd)
 
     def open_settings(self, icon=None, item=None):
         """Open a dialog for securely storing API keys in Windows Credential Manager."""
@@ -783,6 +820,8 @@ class HelloWorldApp:
         dialog.geometry("420x350")
         dialog.resizable(False, False)
         dialog.transient(self.root)
+        dialog.update_idletasks()
+        self._protect_extra_window(self._hwnd_from_widget(dialog))
 
         tk.Label(
             dialog,
