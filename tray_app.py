@@ -212,7 +212,10 @@ class HelloWorldApp:
         label.pack(pady=(10, 0))
 
         self.status_var = tk.StringVar(
-            value=f"Interactive  (show/hide: {SHOW_HIDE_HOTKEY}; click-through: {CLICK_THROUGH_HOTKEY})"
+            value=(
+                f"Interactive  (show/hide: {SHOW_HIDE_HOTKEY}; click-through: {CLICK_THROUGH_HOTKEY}; "
+                f"analyze screen: {SCREEN_ANALYSIS_HOTKEY})"
+            )
         )
         status_label = tk.Label(
             self.root,
@@ -317,6 +320,9 @@ class HelloWorldApp:
         )
         response_provider_combo.pack(side="right")
         self._protect_combobox_popdown(response_provider_combo)
+        tk.Button(response_frame, text="Analyze screen", command=self.trigger_screen_analysis).pack(
+            padx=8, pady=(0, 4)
+        )
         tk.Label(
             response_frame,
             textvariable=self.response_status_var,
@@ -352,6 +358,25 @@ class HelloWorldApp:
             ctypes.windll.user32.SetWindowDisplayAffinity(target_hwnd, affinity)
         except Exception:
             pass
+
+    def trigger_screen_analysis(self, icon=None, item=None):
+        """Entry point for the hotkey, the button, and (potentially) the tray
+        menu — marshals onto the Tk thread before touching Tk/Win32 state,
+        matching the pattern used by toggle_privacy_mode."""
+        self.root.after(0, self._capture_and_queue_screen)
+
+    def _capture_and_queue_screen(self):
+        """Capture + downscale + encode happens synchronously here since it's
+        fast (<100ms); the slow network call happens later on the existing
+        response-worker thread once the job comes off the queue."""
+        try:
+            screenshot = ImageGrab.grab()
+            image_b64 = _prepare_vision_image(screenshot)
+        except Exception as error:
+            self._set_response_status(f"Screen capture error: {error}")
+            return
+        self.response_queue.put({"type": "image", "data": image_b64})
+        self._set_response_status("Analyzing screen...")
 
     def _hwnd_from_widget(self, widget):
         raw = widget.winfo_id()
@@ -410,6 +435,7 @@ class HelloWorldApp:
         keyboard.add_hotkey(TASKBAR_TOGGLE_HOTKEY, self.toggle_taskbar_setting)
         keyboard.add_hotkey(PRIVACY_HOTKEY, self.toggle_privacy_mode)
         keyboard.add_hotkey(SPEECH_TO_TEXT_HOTKEY, self.start_speech_to_text)
+        keyboard.add_hotkey(SCREEN_ANALYSIS_HOTKEY, self.trigger_screen_analysis)
 
     def _on_opacity_change(self, value):
         self.root.attributes("-alpha", int(value) / 100)

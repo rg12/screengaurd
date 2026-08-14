@@ -31,5 +31,41 @@ class PrepareVisionImageTests(unittest.TestCase):
         self.assertEqual(result.size, (400, 300))
 
 
+class TriggerScreenAnalysisTests(unittest.TestCase):
+    def _make_app(self):
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        app.response_queue = queue.Queue()
+        app.root = mock.Mock()
+        app.root.after.side_effect = lambda delay, fn: fn()
+        return tray_app, app
+
+    def test_capture_and_queue_screen_puts_image_job(self):
+        tray_app, app = self._make_app()
+        statuses = []
+        app._set_response_status = statuses.append
+        fake_screenshot = Image.new("RGB", (10, 10), color="red")
+
+        with mock.patch.object(tray_app.ImageGrab, "grab", return_value=fake_screenshot):
+            app.trigger_screen_analysis()
+
+        job = app.response_queue.get_nowait()
+        self.assertEqual(job["type"], "image")
+        decoded = base64.b64decode(job["data"])
+        self.assertTrue(decoded.startswith(b"\x89PNG"))
+        self.assertIn("Analyzing screen", statuses[-1])
+
+    def test_capture_failure_sets_status_and_does_not_queue(self):
+        tray_app, app = self._make_app()
+        statuses = []
+        app._set_response_status = statuses.append
+
+        with mock.patch.object(tray_app.ImageGrab, "grab", side_effect=RuntimeError("boom")):
+            app.trigger_screen_analysis()
+
+        self.assertTrue(app.response_queue.empty())
+        self.assertIn("Screen capture error", statuses[-1])
+
+
 if __name__ == "__main__":
     unittest.main()
