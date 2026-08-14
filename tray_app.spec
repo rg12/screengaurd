@@ -5,7 +5,10 @@ a = Analysis(
     ['tray_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    # Bundle the icon assets: create_icon_image()/_apply_window_icon() look them
+    # up under Path(__file__).parent, which in a onefile build is the temp
+    # extraction dir — without this they fall back to the generated icon.
+    datas=[('assets', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
