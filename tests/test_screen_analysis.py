@@ -160,5 +160,31 @@ class ResponseWorkerDispatchTests(unittest.TestCase):
         self.assertEqual(handled, ["abc"])
 
 
+class ClearChatTests(unittest.TestCase):
+    def test_clear_chat_empties_boxes_and_resets_history(self):
+        import tkinter as tk
+        from tkinter import scrolledtext
+
+        tray_app = importlib.import_module("tray_app")
+        root = tk.Tk()
+        try:
+            app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+            app.transcript_box = scrolledtext.ScrolledText(root)
+            app.response_box = scrolledtext.ScrolledText(root)
+            for box in (app.transcript_box, app.response_box):
+                box.configure(state="normal")
+                box.insert("end", "some previous chat content\n")
+                box.configure(state="disabled")
+            app.response_history = [{"role": "user", "content": "hi"}]
+
+            app.clear_chat()
+
+            self.assertEqual(app.transcript_box.get("1.0", "end").strip(), "")
+            self.assertEqual(app.response_box.get("1.0", "end").strip(), "")
+            self.assertEqual(app.response_history, [])
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()

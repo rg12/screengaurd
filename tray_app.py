@@ -232,6 +232,8 @@ class HelloWorldApp:
         opacity_frame = tk.Frame(self.root)
         opacity_frame.pack(fill="x", padx=10, pady=10)
 
+        tk.Button(opacity_frame, text="Clear chat", command=self.clear_chat).pack(side="right", padx=(10, 0))
+
         tk.Label(opacity_frame, text="Opacity").pack(side="left")
         slider = tk.Scale(
             opacity_frame,
@@ -652,6 +654,20 @@ class HelloWorldApp:
             text="Stop listening" if self.is_transcribing else "Start listening",
             state="normal",
         )
+
+    def clear_chat(self, icon=None, item=None):
+        """Wipe both scroll boxes and reset the AI's short-term reply memory
+        so old exchanges neither clutter the screen nor influence future
+        replies."""
+        self.transcript_box.configure(state="normal")
+        self.transcript_box.delete("1.0", "end")
+        self.transcript_box.configure(state="disabled")
+
+        self.response_box.configure(state="normal")
+        self.response_box.delete("1.0", "end")
+        self.response_box.configure(state="disabled")
+
+        self.response_history = []
 
     def _add_transcript(self, transcript):
         self.transcript_box.configure(state="normal")
