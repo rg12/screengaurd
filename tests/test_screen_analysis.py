@@ -67,5 +67,98 @@ class TriggerScreenAnalysisTests(unittest.TestCase):
         self.assertIn("Screen capture error", statuses[-1])
 
 
+class FakeStream:
+    def __init__(self, chunks):
+        self.text_stream = iter(chunks)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class FakeMessages:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def stream(self, **kwargs):
+        return FakeStream(self._chunks)
+
+
+class FakeAnthropicClient:
+    def __init__(self, chunks):
+        self.messages = FakeMessages(chunks)
+
+
+class GenerateScreenAnalysisTests(unittest.TestCase):
+    def test_streams_and_returns_full_reply(self):
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        app.root = mock.Mock()
+        app.root.after.side_effect = lambda delay, fn: fn()
+        app._anthropic_client = FakeAnthropicClient(["Hello", ", ", "world."])
+        app._anthropic_client_key = "test-key"
+        chunks = []
+        app._append_response_chunk = chunks.append
+        app._end_response_chunk_stream = lambda: chunks.append("<end>")
+
+        reply = app._generate_screen_analysis("test-key", base64.b64encode(b"data").decode("ascii"))
+
+        self.assertEqual(reply, "Hello, world.")
+        self.assertEqual(chunks, ["Hello", ", ", "world.", "<end>"])
+
+
+class HandleScreenAnalysisJobTests(unittest.TestCase):
+    def _make_app(self):
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        app.root = mock.Mock()
+        app.root.after.side_effect = lambda delay, fn: fn()
+        return tray_app, app
+
+    def test_missing_key_sets_status_and_does_not_call_generate(self):
+        tray_app, app = self._make_app()
+        statuses = []
+        app._set_response_status = statuses.append
+        app._generate_screen_analysis = mock.Mock()
+
+        with mock.patch.object(tray_app.keyring, "get_password", return_value=None):
+            app._handle_screen_analysis_job("irrelevant")
+
+        app._generate_screen_analysis.assert_not_called()
+        self.assertIn("Anthropic key", statuses[-1])
+
+    def test_success_tags_response_and_reports_ready_status(self):
+        tray_app, app = self._make_app()
+        statuses = []
+        chunks = []
+        app._set_response_status = statuses.append
+        app._append_response_chunk = chunks.append
+        app._generate_screen_analysis = mock.Mock(return_value="It's a login form.")
+
+        with mock.patch.object(tray_app.keyring, "get_password", return_value="test-key"):
+            app._handle_screen_analysis_job("base64data")
+
+        self.assertEqual(chunks[0], "[Screen] ")
+        app._generate_screen_analysis.assert_called_once_with("test-key", "base64data")
+        self.assertIn("Ready for the next sentence", statuses[-1])
+
+
+class ResponseWorkerDispatchTests(unittest.TestCase):
+    def test_dispatches_image_job_to_handler_and_stops_on_none(self):
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        app.response_queue = queue.Queue()
+        handled = []
+        app._handle_screen_analysis_job = handled.append
+        app.response_queue.put({"type": "image", "data": "abc"})
+        app.response_queue.put(None)
+
+        app._response_worker()
+
+        self.assertEqual(handled, ["abc"])
+
+
 if __name__ == "__main__":
     unittest.main()

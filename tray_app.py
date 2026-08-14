@@ -661,12 +661,18 @@ class HelloWorldApp:
         self.response_queue.put(transcript)
 
     def _response_worker(self):
-        """Turn each finalized utterance into a concise English suggested reply."""
+        """Turn each finalized utterance into a concise English suggested
+        reply, or (for image jobs) a screen analysis."""
         while True:
-            transcript = self.response_queue.get()
-            if transcript is None:
+            job = self.response_queue.get()
+            if job is None:
                 return
 
+            if isinstance(job, dict) and job.get("type") == "image":
+                self._handle_screen_analysis_job(job["data"])
+                continue
+
+            transcript = job
             provider = self.response_provider
             key_name = {
                 "Claude": ANTHROPIC_KEY_NAME,
@@ -741,6 +747,55 @@ class HelloWorldApp:
         reply = "".join(text_parts).strip()
         self.root.after(0, self._end_response_chunk_stream)
         return reply
+
+    def _generate_screen_analysis(self, api_key, image_b64):
+        """Standalone vision request (no response_history attached) — always
+        Claude, streamed the same way _generate_response_streaming is."""
+        client = self._get_anthropic_client(api_key)
+        text_parts = []
+        with client.messages.stream(
+            model="claude-sonnet-5",
+            max_tokens=400,
+            system=SCREEN_ANALYSIS_SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": image_b64,
+                            },
+                        }
+                    ],
+                }
+            ],
+        ) as stream:
+            for delta in stream.text_stream:
+                text_parts.append(delta)
+                self.root.after(0, lambda chunk=delta: self._append_response_chunk(chunk))
+        reply = "".join(text_parts).strip()
+        self.root.after(0, self._end_response_chunk_stream)
+        return reply
+
+    def _handle_screen_analysis_job(self, image_b64):
+        api_key = keyring.get_password(CREDENTIAL_SERVICE, ANTHROPIC_KEY_NAME)
+        if not api_key:
+            self.root.after(
+                0, lambda: self._set_response_status("Add your Anthropic key in API settings.")
+            )
+            return
+
+        try:
+            self.root.after(0, lambda: self._append_response_chunk("[Screen] "))
+            reply = self._generate_screen_analysis(api_key, image_b64)
+            if not reply:
+                raise RuntimeError("Claude returned an empty response.")
+            self.root.after(0, lambda: self._set_response_status("Ready for the next sentence."))
+        except Exception as error:
+            self.root.after(0, lambda message=str(error): self._set_response_status(f"Response error: {message}"))
 
     def _generate_response(self, provider, api_key, transcript):
         conversation = self._build_conversation(transcript)
