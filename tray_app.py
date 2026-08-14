@@ -207,6 +207,7 @@ class HelloWorldApp:
         self.root.title("College Demo App")
         self.root.geometry("780x520")
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)  # X button hides, doesn't quit
+        self._apply_window_icon()
 
         label = tk.Label(self.root, text="Hello, World!", font=("Segoe UI", 20))
         label.pack(pady=(10, 0))
@@ -1122,6 +1123,27 @@ class HelloWorldApp:
         draw.line((shield_center - 5, shield_top + 8, shield_center + 5, shield_bottom - 6), fill=(24, 167, 181, 255), width=max(1, int(size * 0.03)))
 
         return img
+
+    def _apply_window_icon(self):
+        """Set the title-bar/taskbar icon to match the tray icon. Tk defaults
+        to its own icon if this is never called, which is what makes a
+        freshly built app look like it's still running an old build."""
+        app_dir = Path(__file__).resolve().parent
+        ico_path = app_dir / "assets" / "screengaurd.ico"
+        png_path = app_dir / "assets" / "screengaurd.png"
+        try:
+            if ico_path.exists():
+                self.root.iconbitmap(str(ico_path))
+                return
+        except Exception:
+            pass
+        try:
+            if png_path.exists():
+                # Keep a reference on self — Tk drops the image if it's GC'd.
+                self._window_icon_photo = tk.PhotoImage(file=str(png_path))
+                self.root.iconphoto(True, self._window_icon_photo)
+        except Exception:
+            pass
 
     def create_icon_image(self):
         size = 64

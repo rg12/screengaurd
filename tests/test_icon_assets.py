@@ -35,6 +35,22 @@ class IconAssetTests(unittest.TestCase):
         self.assertEqual(image.size, (64, 64))
         self.assertIsNotNone(image.getbbox())
 
+    def test_apply_window_icon_sets_iconbitmap_from_ico_asset(self):
+        import tkinter as tk
+
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        root = tk.Tk()
+        try:
+            app.root = root
+            with mock.patch.object(root, "iconbitmap") as iconbitmap:
+                app._apply_window_icon()
+            iconbitmap.assert_called_once()
+            called_path = Path(iconbitmap.call_args[0][0])
+            self.assertEqual(called_path.name, "screengaurd.ico")
+        finally:
+            root.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
