@@ -9,6 +9,7 @@
 import threading
 import ctypes
 import asyncio
+import base64
 import io
 import json
 import contextlib
@@ -19,7 +20,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import scrolledtext, ttk
 from urllib.parse import urlencode
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageGrab
 import pystray
 import keyboard  # pip install keyboard (used for the global hotkey listener)
 import numpy as np
@@ -59,6 +60,7 @@ SHOW_HIDE_HOTKEY = "ctrl+alt+h"
 TASKBAR_TOGGLE_HOTKEY = "ctrl+alt+t"
 PRIVACY_HOTKEY = "ctrl+alt+p"
 SPEECH_TO_TEXT_HOTKEY = "ctrl+alt+m"
+SCREEN_ANALYSIS_HOTKEY = "ctrl+alt+s"
 SPEECH_SAMPLE_RATE = 16_000
 CREDENTIAL_SERVICE = "College Demo App"
 DEEPGRAM_KEY_NAME = "deepgram_api_key"
@@ -71,6 +73,27 @@ RESPONSE_SYSTEM_PROMPT = (
     "Never claim the user said something that is not in the transcript. Reply in clear, "
     "natural English with only one or two concise sentences and no preamble."
 )
+SCREEN_ANALYSIS_MAX_EDGE = 1568  # Anthropic's documented recommended max long edge for image inputs
+SCREEN_ANALYSIS_SYSTEM_PROMPT = (
+    "You are looking at a screenshot of the user's screen. Describe what's on screen "
+    "and, if there is a visible question or problem, answer it concisely."
+)
+
+
+def _prepare_vision_image(image, max_edge=SCREEN_ANALYSIS_MAX_EDGE):
+    """Downscale (never upscale) so the long edge is at most max_edge, then
+    encode as base64 PNG. Keeps screen-analysis requests cheap and fast
+    without losing legibility for typical UI/text content."""
+    width, height = image.size
+    longest = max(width, height)
+    if longest > max_edge:
+        scale = max_edge / longest
+        new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        image = image.resize(new_size, Image.LANCZOS)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 @contextlib.contextmanager
