@@ -208,9 +208,7 @@ class HelloWorldApp:
         self.root.geometry("780x520")
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)  # X button hides, doesn't quit
         self._apply_window_icon()
-
-        label = tk.Label(self.root, text="Hello, World!", font=("Segoe UI", 20))
-        label.pack(pady=(10, 0))
+        self._expanded_geometry = "780x520"
 
         self.status_var = tk.StringVar(
             value=(
@@ -218,7 +216,7 @@ class HelloWorldApp:
                 f"analyze screen: {SCREEN_ANALYSIS_HOTKEY})"
             )
         )
-        status_label = tk.Label(
+        self._status_label = tk.Label(
             self.root,
             textvariable=self.status_var,
             font=("Segoe UI", 8),
@@ -226,18 +224,16 @@ class HelloWorldApp:
             wraplength=740,
             justify="center",
         )
-        status_label.pack(pady=(0, 5))
+        self._status_label.pack(pady=(10, 5))
 
         # Opacity slider: 100 = fully opaque, lower = more see-through
         self.opacity_var = tk.IntVar(value=100)
-        opacity_frame = tk.Frame(self.root)
-        opacity_frame.pack(fill="x", padx=10, pady=10)
+        self._opacity_frame = tk.Frame(self.root)
+        self._opacity_frame.pack(fill="x", padx=10, pady=10)
 
-        tk.Button(opacity_frame, text="Clear chat", command=self.clear_chat).pack(side="right", padx=(10, 0))
-
-        tk.Label(opacity_frame, text="Opacity").pack(side="left")
+        tk.Label(self._opacity_frame, text="Opacity").pack(side="left")
         slider = tk.Scale(
-            opacity_frame,
+            self._opacity_frame,
             from_=20,        # don't allow it to go fully invisible (min 20%)
             to=100,
             orient="horizontal",
@@ -246,13 +242,15 @@ class HelloWorldApp:
         )
         slider.pack(side="left", fill="x", expand=True)
 
-        speech_pane = tk.PanedWindow(self.root, orient="horizontal", sashrelief="raised", sashwidth=4)
-        speech_pane.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self._speech_pane = tk.PanedWindow(self.root, orient="horizontal", sashrelief="raised", sashwidth=4)
+        self._speech_pane.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        speech_frame = tk.LabelFrame(speech_pane, text="Live transcript")
-        response_frame = tk.LabelFrame(speech_pane, text="Suggested English reply")
-        speech_pane.add(speech_frame, minsize=300, stretch="always")
-        speech_pane.add(response_frame, minsize=300, stretch="always")
+        self._speech_frame = tk.LabelFrame(self._speech_pane, text="Live transcript")
+        self._response_frame = tk.LabelFrame(self._speech_pane, text="Suggested English reply")
+        speech_frame = self._speech_frame
+        response_frame = self._response_frame
+        self._speech_pane.add(speech_frame, minsize=300, stretch="always")
+        self._speech_pane.add(response_frame, minsize=300, stretch="always")
 
         self.speech_status_var = tk.StringVar(
             value=f"Choose an audio source, then press {SPEECH_TO_TEXT_HOTKEY} or Start listening."
@@ -309,13 +307,13 @@ class HelloWorldApp:
         self.transcript_box.pack(fill="both", expand=True, padx=8, pady=(2, 8))
 
         self.response_status_var = tk.StringVar(value="Waiting for a finalized sentence...")
-        response_provider_frame = tk.Frame(response_frame)
-        response_provider_frame.pack(fill="x", padx=8, pady=(6, 2))
-        tk.Label(response_provider_frame, text="Response provider").pack(side="left")
+        self._response_provider_frame = tk.Frame(response_frame)
+        self._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2))
+        tk.Label(self._response_provider_frame, text="Response provider").pack(side="left")
         self.response_provider_var = tk.StringVar(value=self.response_provider)
         self.response_provider_var.trace_add("write", self._on_response_provider_changed)
         response_provider_combo = ttk.Combobox(
-            response_provider_frame,
+            self._response_provider_frame,
             textvariable=self.response_provider_var,
             values=("Claude", "Gemini", "GPT"),
             state="readonly",
@@ -323,18 +321,38 @@ class HelloWorldApp:
         )
         response_provider_combo.pack(side="right")
         self._protect_combobox_popdown(response_provider_combo)
-        tk.Button(response_frame, text="Analyze screen", command=self.trigger_screen_analysis).pack(
-            padx=8, pady=(0, 4)
+        self._analyze_screen_button = tk.Button(
+            response_frame, text="Analyze screen", command=self.trigger_screen_analysis
         )
-        tk.Label(
+        self._analyze_screen_button.pack(padx=8, pady=(0, 4))
+        self._response_status_label = tk.Label(
             response_frame,
             textvariable=self.response_status_var,
             anchor="w",
             justify="left",
             wraplength=340,
-        ).pack(fill="x", padx=8, pady=(8, 4))
-        self.response_box = scrolledtext.ScrolledText(response_frame, height=12, wrap="word", state="disabled")
-        self.response_box.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        )
+        self._response_status_label.pack(fill="x", padx=8, pady=(8, 4))
+
+        # Always visible, in both setup and output-only view — sits directly
+        # above the output box so "Clear chat" stays reachable when
+        # everything else is collapsed away.
+        self._response_toolbar_frame = tk.Frame(response_frame)
+        self._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
+        tk.Button(self._response_toolbar_frame, text="Clear chat", command=self.clear_chat).pack(side="right")
+
+        self.response_box = scrolledtext.ScrolledText(
+            response_frame,
+            height=12,
+            wrap="word",
+            state="disabled",
+            bg="#12161a",
+            fg="#f3f4f6",
+            insertbackground="#f3f4f6",
+            font=("Segoe UI", 11),
+            relief="flat",
+        )
+        self.response_box.pack(fill="both", expand=True, padx=8, pady=(4, 8))
 
         # Start visible so launching the app actually shows something; the tray
         # icon and the show/hide hotkey still hide it again afterwards.
@@ -473,6 +491,7 @@ class HelloWorldApp:
         self.is_transcribing = True
         self.stop_transcription_event = threading.Event()
         audio_chunks = queue.Queue(maxsize=64)
+        self.root.after(0, self._apply_ui_mode)
         self.root.after(0, lambda: self._set_speech_status(f"Connecting to {provider}..."))
         self.root.after(0, lambda: self.live_caption_var.set("Waiting for speech..."))
         target = self._run_live_transcription if provider == "Deepgram" else self._run_openai_transcription
@@ -648,6 +667,39 @@ class HelloWorldApp:
         self.stop_transcription_event = None
         self.live_caption_var.set("Live caption will appear here.")
         self._set_speech_status(failure_message or "Live transcription stopped.")
+        self._apply_ui_mode()
+
+    def _apply_ui_mode(self):
+        """Setup controls (audio/transcription/response provider, API
+        settings, live transcript) are only useful before you start; once
+        listening begins, collapse down to just the output box + Clear chat
+        so the overlay is as unobtrusive as possible during the call."""
+        if self.is_transcribing:
+            self._enter_output_only_view()
+        else:
+            self._exit_output_only_view()
+
+    def _enter_output_only_view(self):
+        self._pre_collapse_geometry = self.root.geometry()
+        self._status_label.pack_forget()
+        self._opacity_frame.pack_forget()
+        self._speech_pane.forget(self._speech_frame)
+        self._response_provider_frame.pack_forget()
+        self._analyze_screen_button.pack_forget()
+        self._response_status_label.pack_forget()
+
+        width, height = 420, 260
+        x = (self.root.winfo_screenwidth() - width) // 2
+        self.root.geometry(f"{width}x{height}+{x}+0")
+
+    def _exit_output_only_view(self):
+        self._status_label.pack(pady=(10, 5), before=self._speech_pane)
+        self._opacity_frame.pack(fill="x", padx=10, pady=10, before=self._speech_pane)
+        self._speech_pane.add(self._speech_frame, before=self._response_frame, minsize=300, stretch="always")
+        self._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2), before=self._response_toolbar_frame)
+        self._analyze_screen_button.pack(padx=8, pady=(0, 4), before=self._response_toolbar_frame)
+        self._response_status_label.pack(fill="x", padx=8, pady=(8, 4), before=self._response_toolbar_frame)
+        self.root.geometry(getattr(self, "_pre_collapse_geometry", None) or self._expanded_geometry)
 
     def _set_speech_status(self, message):
         self.speech_status_var.set(message)
