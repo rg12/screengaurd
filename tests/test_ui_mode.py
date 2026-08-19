@@ -1,6 +1,7 @@
 import importlib
 import tkinter as tk
 import unittest
+from tkinter import ttk
 
 
 class ApplyUiModeTests(unittest.TestCase):
@@ -18,29 +19,29 @@ class ApplyUiModeTests(unittest.TestCase):
         app._expanded_geometry = "780x520"
         app.is_transcribing = False
 
-        app._status_label = tk.Label(app.root, text="status")
+        app._status_label = ttk.Label(app.root, text="status")
         app._status_label.pack(pady=(10, 5))
 
-        app._opacity_frame = tk.Frame(app.root)
+        app._opacity_frame = ttk.Frame(app.root)
         app._opacity_frame.pack(fill="x", padx=10, pady=10)
 
-        app._speech_pane = tk.PanedWindow(app.root, orient="horizontal")
+        app._speech_pane = ttk.Panedwindow(app.root, orient="horizontal")
         app._speech_pane.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        app._speech_frame = tk.LabelFrame(app._speech_pane, text="Live transcript")
-        app._response_frame = tk.LabelFrame(app._speech_pane, text="Suggested English reply")
-        app._speech_pane.add(app._speech_frame, minsize=300, stretch="always")
-        app._speech_pane.add(app._response_frame, minsize=300, stretch="always")
+        app._speech_frame = ttk.LabelFrame(app._speech_pane, text="Live transcript")
+        app._response_frame = ttk.LabelFrame(app._speech_pane, text="Suggested English reply")
+        app._speech_pane.add(app._speech_frame, weight=1)
+        app._speech_pane.add(app._response_frame, weight=1)
 
-        app._response_provider_frame = tk.Frame(app._response_frame)
+        app._response_provider_frame = ttk.Frame(app._response_frame)
         app._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2))
-        app._response_status_label = tk.Label(app._response_frame, text="status")
+        app._response_status_label = ttk.Label(app._response_frame, text="status")
         app._response_status_label.pack(fill="x", padx=8, pady=(8, 4))
-        app._response_toolbar_frame = tk.Frame(app._response_frame)
+        app._response_toolbar_frame = ttk.Frame(app._response_frame)
         app._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
-        tk.Button(app._response_toolbar_frame, text="Clear chat").pack(side="right")
-        app._analyze_screen_button = tk.Button(app._response_toolbar_frame, text="Analyze screen")
+        ttk.Button(app._response_toolbar_frame, text="Clear chat").pack(side="right")
+        app._analyze_screen_button = ttk.Button(app._response_toolbar_frame, text="Analyze screen")
         app._analyze_screen_button.pack(side="left")
-        app.transcribe_button = tk.Button(app._response_toolbar_frame, text="Start listening")
+        app.transcribe_button = ttk.Button(app._response_toolbar_frame, text="Start listening")
         app.transcribe_button.pack(side="left")
         app.response_box = tk.Text(app._response_frame, height=12)
         app.response_box.pack(fill="both", expand=True, padx=8, pady=(4, 8))

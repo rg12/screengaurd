@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
     ['tray_app.py'],
@@ -8,7 +9,9 @@ a = Analysis(
     # Bundle the icon assets: create_icon_image()/_apply_window_icon() look them
     # up under Path(__file__).parent, which in a onefile build is the temp
     # extraction dir — without this they fall back to the generated icon.
-    datas=[('assets', 'assets')],
+    # sv_ttk's .tcl theme files and spritesheet PNGs are package data, not
+    # Python modules, so PyInstaller won't pick them up automatically either.
+    datas=[('assets', 'assets')] + collect_data_files('sv_ttk'),
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

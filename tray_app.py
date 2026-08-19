@@ -1,7 +1,7 @@
 # Background tray overlay with click-through, capture exclusion, and speech to text.
 #
 # Requirements:
-#     pip install pystray pillow keyboard sounddevice soundcard keyring websockets numpy anthropic openai google-genai
+#     pip install pystray pillow keyboard sounddevice soundcard keyring websockets numpy anthropic openai google-genai sv_ttk
 #
 # Run:
 #     pythonw tray_app.py
@@ -33,6 +33,14 @@ import wave
 from openai import OpenAI
 from google import genai
 import anthropic
+import sv_ttk  # pip install sv_ttk (modern Windows-11-style ttk theme)
+
+# --- Light modern theme palette (Sun Valley "light") ---
+APP_BG = "#fafafa"
+CARD_BG = "#ffffff"
+TEXT_COLOR = "#1a1a1a"
+MUTED_TEXT_COLOR = "#636363"
+BORDER_COLOR = "#e0e0e0"
 
 # --- Win32 constants for capture exclusion and click-through ---
 WDA_NONE = 0x0
@@ -206,9 +214,12 @@ class HelloWorldApp:
         self.root = tk.Tk()
         self.root.title("College Demo App")
         self.root.geometry("780x520")
+        self.root.configure(bg=APP_BG)
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)  # X button hides, doesn't quit
         self._apply_window_icon()
         self._expanded_geometry = "780x520"
+
+        sv_ttk.set_theme("light")
 
         self.status_var = tk.StringVar(
             value=(
@@ -216,11 +227,11 @@ class HelloWorldApp:
                 f"analyze screen: {SCREEN_ANALYSIS_HOTKEY})"
             )
         )
-        self._status_label = tk.Label(
+        self._status_label = ttk.Label(
             self.root,
             textvariable=self.status_var,
             font=("Segoe UI", 8),
-            fg="gray",
+            foreground=MUTED_TEXT_COLOR,
             wraplength=740,
             justify="center",
         )
@@ -228,11 +239,11 @@ class HelloWorldApp:
 
         # Opacity slider: 100 = fully opaque, lower = more see-through
         self.opacity_var = tk.IntVar(value=100)
-        self._opacity_frame = tk.Frame(self.root)
+        self._opacity_frame = ttk.Frame(self.root)
         self._opacity_frame.pack(fill="x", padx=10, pady=10)
 
-        tk.Label(self._opacity_frame, text="Opacity").pack(side="left")
-        slider = tk.Scale(
+        ttk.Label(self._opacity_frame, text="Opacity").pack(side="left")
+        slider = ttk.Scale(
             self._opacity_frame,
             from_=20,        # don't allow it to go fully invisible (min 20%)
             to=100,
@@ -240,28 +251,28 @@ class HelloWorldApp:
             variable=self.opacity_var,
             command=self._on_opacity_change,
         )
-        slider.pack(side="left", fill="x", expand=True)
+        slider.pack(side="left", fill="x", expand=True, padx=(8, 0))
 
-        self._speech_pane = tk.PanedWindow(self.root, orient="horizontal", sashrelief="raised", sashwidth=4)
+        self._speech_pane = ttk.Panedwindow(self.root, orient="horizontal")
         self._speech_pane.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        self._speech_frame = tk.LabelFrame(self._speech_pane, text="Live transcript")
-        self._response_frame = tk.LabelFrame(self._speech_pane, text="Suggested English reply")
+        self._speech_frame = ttk.LabelFrame(self._speech_pane, text="Live transcript")
+        self._response_frame = ttk.LabelFrame(self._speech_pane, text="Suggested English reply")
         speech_frame = self._speech_frame
         response_frame = self._response_frame
-        self._speech_pane.add(speech_frame, minsize=300, stretch="always")
-        self._speech_pane.add(response_frame, minsize=300, stretch="always")
+        self._speech_pane.add(speech_frame, weight=1)
+        self._speech_pane.add(response_frame, weight=1)
 
         self.speech_status_var = tk.StringVar(
             value=f"Choose an audio source, then press {SPEECH_TO_TEXT_HOTKEY} or Start listening."
         )
-        tk.Label(speech_frame, textvariable=self.speech_status_var, anchor="w", justify="left", wraplength=340).pack(
+        ttk.Label(speech_frame, textvariable=self.speech_status_var, anchor="w", justify="left", wraplength=340).pack(
             fill="x", padx=8, pady=(6, 2)
         )
 
-        source_frame = tk.Frame(speech_frame)
+        source_frame = ttk.Frame(speech_frame)
         source_frame.pack(fill="x", padx=8, pady=(2, 4))
-        tk.Label(source_frame, text="Audio source").pack(side="left")
+        ttk.Label(source_frame, text="Audio source").pack(side="left")
         self.audio_source_var = tk.StringVar(value=self.audio_source)
         self.audio_source_var.trace_add("write", self._on_audio_source_changed)
         audio_source_combo = ttk.Combobox(
@@ -274,9 +285,9 @@ class HelloWorldApp:
         audio_source_combo.pack(side="right")
         self._protect_combobox_popdown(audio_source_combo)
 
-        transcription_frame = tk.Frame(speech_frame)
+        transcription_frame = ttk.Frame(speech_frame)
         transcription_frame.pack(fill="x", padx=8, pady=(0, 4))
-        tk.Label(transcription_frame, text="Transcription").pack(side="left")
+        ttk.Label(transcription_frame, text="Transcription").pack(side="left")
         self.transcription_provider_var = tk.StringVar(value=self.transcription_provider)
         self.transcription_provider_var.trace_add("write", self._on_transcription_provider_changed)
         transcription_combo = ttk.Combobox(
@@ -289,20 +300,34 @@ class HelloWorldApp:
         transcription_combo.pack(side="right")
         self._protect_combobox_popdown(transcription_combo)
 
-        tk.Button(speech_frame, text="API settings", command=self._open_settings_dialog).pack(padx=8, pady=(0, 4))
+        ttk.Button(speech_frame, text="API settings", command=self._open_settings_dialog).pack(padx=8, pady=(0, 4))
 
         self.live_caption_var = tk.StringVar(value="Live caption will appear here.")
-        tk.Label(speech_frame, textvariable=self.live_caption_var, anchor="w", justify="left", wraplength=375).pack(
+        ttk.Label(speech_frame, textvariable=self.live_caption_var, anchor="w", justify="left", wraplength=375).pack(
             fill="x", padx=8, pady=(2, 4)
         )
 
-        self.transcript_box = scrolledtext.ScrolledText(speech_frame, height=7, wrap="word", state="disabled")
+        self.transcript_box = scrolledtext.ScrolledText(
+            speech_frame,
+            height=7,
+            wrap="word",
+            state="disabled",
+            bg=CARD_BG,
+            fg=TEXT_COLOR,
+            insertbackground=TEXT_COLOR,
+            font=("Segoe UI", 10),
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+            highlightcolor=BORDER_COLOR,
+        )
         self.transcript_box.pack(fill="both", expand=True, padx=8, pady=(2, 8))
 
         self.response_status_var = tk.StringVar(value="Waiting for a finalized sentence...")
-        self._response_provider_frame = tk.Frame(response_frame)
+        self._response_provider_frame = ttk.Frame(response_frame)
         self._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2))
-        tk.Label(self._response_provider_frame, text="Response provider").pack(side="left")
+        ttk.Label(self._response_provider_frame, text="Response provider").pack(side="left")
         self.response_provider_var = tk.StringVar(value=self.response_provider)
         self.response_provider_var.trace_add("write", self._on_response_provider_changed)
         response_provider_combo = ttk.Combobox(
@@ -314,7 +339,7 @@ class HelloWorldApp:
         )
         response_provider_combo.pack(side="right")
         self._protect_combobox_popdown(response_provider_combo)
-        self._response_status_label = tk.Label(
+        self._response_status_label = ttk.Label(
             response_frame,
             textvariable=self.response_status_var,
             anchor="w",
@@ -326,30 +351,35 @@ class HelloWorldApp:
         # Always visible, in both setup and output-only view — sits directly
         # above the output box so Start/Stop, Analyze screen, and Clear chat
         # all stay reachable when everything else is collapsed away.
-        self._response_toolbar_frame = tk.Frame(response_frame)
+        self._response_toolbar_frame = ttk.Frame(response_frame)
         self._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
-        tk.Button(self._response_toolbar_frame, text="Clear chat", command=self.clear_chat).pack(side="right")
-        self._analyze_screen_button = tk.Button(
+        ttk.Button(self._response_toolbar_frame, text="Clear chat", command=self.clear_chat).pack(side="right")
+        self._analyze_screen_button = ttk.Button(
             self._response_toolbar_frame, text="Analyze screen", command=self.trigger_screen_analysis
         )
         self._analyze_screen_button.pack(side="left")
-        self.transcribe_button = tk.Button(
+        self.transcribe_button = ttk.Button(
             self._response_toolbar_frame,
             text="Start listening",
             command=self.start_speech_to_text,
+            style="Accent.TButton",
         )
-        self.transcribe_button.pack(side="left")
+        self.transcribe_button.pack(side="left", padx=(0, 6))
 
         self.response_box = scrolledtext.ScrolledText(
             response_frame,
             height=12,
             wrap="word",
             state="disabled",
-            bg="#12161a",
-            fg="#f3f4f6",
-            insertbackground="#f3f4f6",
+            bg=CARD_BG,
+            fg=TEXT_COLOR,
+            insertbackground=TEXT_COLOR,
             font=("Segoe UI", 11),
             relief="flat",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+            highlightcolor=BORDER_COLOR,
         )
         self.response_box.pack(fill="both", expand=True, padx=8, pady=(4, 8))
 
@@ -458,7 +488,7 @@ class HelloWorldApp:
         keyboard.add_hotkey(SCREEN_ANALYSIS_HOTKEY, self.trigger_screen_analysis)
 
     def _on_opacity_change(self, value):
-        self.root.attributes("-alpha", int(value) / 100)
+        self.root.attributes("-alpha", int(float(value)) / 100)
 
     def _on_audio_source_changed(self, *_):
         self.audio_source = self.audio_source_var.get()
@@ -693,7 +723,7 @@ class HelloWorldApp:
     def _exit_output_only_view(self):
         self._status_label.pack(pady=(10, 5), before=self._speech_pane)
         self._opacity_frame.pack(fill="x", padx=10, pady=10, before=self._speech_pane)
-        self._speech_pane.add(self._speech_frame, before=self._response_frame, minsize=300, stretch="always")
+        self._speech_pane.insert(0, self._speech_frame, weight=1)
         self._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2), before=self._response_toolbar_frame)
         self._response_status_label.pack(fill="x", padx=8, pady=(8, 4), before=self._response_toolbar_frame)
         self.root.geometry(getattr(self, "_pre_collapse_geometry", None) or self._expanded_geometry)
@@ -988,44 +1018,46 @@ class HelloWorldApp:
         self.settings_window = dialog
         dialog.title("API Settings")
         dialog.geometry("420x350")
+        dialog.configure(bg=APP_BG)
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.update_idletasks()
         self._protect_extra_window(self._hwnd_from_widget(dialog))
 
-        tk.Label(
+        ttk.Label(
             dialog,
             text="Keys are stored in Windows Credential Manager, not in this project.",
             justify="left",
             wraplength=390,
         ).pack(anchor="w", padx=15, pady=(15, 10))
 
-        form = tk.Frame(dialog)
+        form = ttk.Frame(dialog)
         form.pack(fill="x", padx=15)
-        tk.Label(form, text="Deepgram API key").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(form, text="Deepgram API key").grid(row=0, column=0, sticky="w", pady=5)
         deepgram_var = tk.StringVar()
-        tk.Entry(form, textvariable=deepgram_var, show="*", width=38).grid(row=0, column=1, padx=(10, 0), pady=5)
+        ttk.Entry(form, textvariable=deepgram_var, show="*", width=38).grid(row=0, column=1, padx=(10, 0), pady=5)
 
-        tk.Label(form, text="Anthropic API key").grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Label(form, text="Anthropic API key").grid(row=1, column=0, sticky="w", pady=5)
         anthropic_var = tk.StringVar()
-        tk.Entry(form, textvariable=anthropic_var, show="*", width=38).grid(row=1, column=1, padx=(10, 0), pady=5)
+        ttk.Entry(form, textvariable=anthropic_var, show="*", width=38).grid(row=1, column=1, padx=(10, 0), pady=5)
 
-        tk.Label(form, text="OpenAI API key").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Label(form, text="OpenAI API key").grid(row=2, column=0, sticky="w", pady=5)
         openai_var = tk.StringVar()
-        tk.Entry(form, textvariable=openai_var, show="*", width=38).grid(row=2, column=1, padx=(10, 0), pady=5)
+        ttk.Entry(form, textvariable=openai_var, show="*", width=38).grid(row=2, column=1, padx=(10, 0), pady=5)
 
-        tk.Label(form, text="Gemini API key").grid(row=3, column=0, sticky="w", pady=5)
+        ttk.Label(form, text="Gemini API key").grid(row=3, column=0, sticky="w", pady=5)
         gemini_var = tk.StringVar()
-        tk.Entry(form, textvariable=gemini_var, show="*", width=38).grid(row=3, column=1, padx=(10, 0), pady=5)
+        ttk.Entry(form, textvariable=gemini_var, show="*", width=38).grid(row=3, column=1, padx=(10, 0), pady=5)
 
         status_var = tk.StringVar(value="Leave a field blank to keep its saved key unchanged.")
-        tk.Label(dialog, textvariable=status_var, fg="gray", wraplength=390, justify="left").pack(
+        ttk.Label(dialog, textvariable=status_var, foreground=MUTED_TEXT_COLOR, wraplength=390, justify="left").pack(
             anchor="w", padx=15, pady=(12, 4)
         )
 
-        self.settings_save_button = tk.Button(
+        self.settings_save_button = ttk.Button(
             dialog,
             text="Save securely",
+            style="Accent.TButton",
             command=lambda: self._validate_and_save_api_keys(
                 deepgram_var, anthropic_var, openai_var, gemini_var, status_var
             ),
