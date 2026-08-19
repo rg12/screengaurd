@@ -39,6 +39,9 @@ class ApplyUiModeTests(unittest.TestCase):
         app._response_status_label.pack(fill="x", padx=8, pady=(8, 4))
         app._response_toolbar_frame = tk.Frame(app._response_frame)
         app._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
+        tk.Button(app._response_toolbar_frame, text="Clear chat").pack(side="right")
+        app.transcribe_button = tk.Button(app._response_toolbar_frame, text="Start listening")
+        app.transcribe_button.pack(side="left")
         app.response_box = tk.Text(app._response_frame, height=12)
         app.response_box.pack(fill="both", expand=True, padx=8, pady=(4, 8))
 
@@ -59,6 +62,7 @@ class ApplyUiModeTests(unittest.TestCase):
             self.assertFalse(app._response_status_label.winfo_ismapped())
             self.assertTrue(app._response_toolbar_frame.winfo_ismapped())
             self.assertTrue(app.response_box.winfo_ismapped())
+            self.assertTrue(app.transcribe_button.winfo_ismapped())
 
             size_part = app.root.geometry().split("+")[0]
             self.assertEqual(size_part, "420x260")

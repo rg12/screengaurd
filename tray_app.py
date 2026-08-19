@@ -289,13 +289,6 @@ class HelloWorldApp:
         transcription_combo.pack(side="right")
         self._protect_combobox_popdown(transcription_combo)
 
-        self.transcribe_button = tk.Button(
-            speech_frame,
-            text="Start listening",
-            command=self.start_speech_to_text,
-        )
-        self.transcribe_button.pack(padx=8, pady=4)
-
         tk.Button(speech_frame, text="API settings", command=self._open_settings_dialog).pack(padx=8, pady=(0, 4))
 
         self.live_caption_var = tk.StringVar(value="Live caption will appear here.")
@@ -340,6 +333,12 @@ class HelloWorldApp:
         self._response_toolbar_frame = tk.Frame(response_frame)
         self._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
         tk.Button(self._response_toolbar_frame, text="Clear chat", command=self.clear_chat).pack(side="right")
+        self.transcribe_button = tk.Button(
+            self._response_toolbar_frame,
+            text="Start listening",
+            command=self.start_speech_to_text,
+        )
+        self.transcribe_button.pack(side="left")
 
         self.response_box = scrolledtext.ScrolledText(
             response_frame,
