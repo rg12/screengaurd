@@ -314,10 +314,6 @@ class HelloWorldApp:
         )
         response_provider_combo.pack(side="right")
         self._protect_combobox_popdown(response_provider_combo)
-        self._analyze_screen_button = tk.Button(
-            response_frame, text="Analyze screen", command=self.trigger_screen_analysis
-        )
-        self._analyze_screen_button.pack(padx=8, pady=(0, 4))
         self._response_status_label = tk.Label(
             response_frame,
             textvariable=self.response_status_var,
@@ -328,11 +324,15 @@ class HelloWorldApp:
         self._response_status_label.pack(fill="x", padx=8, pady=(8, 4))
 
         # Always visible, in both setup and output-only view — sits directly
-        # above the output box so "Clear chat" stays reachable when
-        # everything else is collapsed away.
+        # above the output box so Start/Stop, Analyze screen, and Clear chat
+        # all stay reachable when everything else is collapsed away.
         self._response_toolbar_frame = tk.Frame(response_frame)
         self._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
         tk.Button(self._response_toolbar_frame, text="Clear chat", command=self.clear_chat).pack(side="right")
+        self._analyze_screen_button = tk.Button(
+            self._response_toolbar_frame, text="Analyze screen", command=self.trigger_screen_analysis
+        )
+        self._analyze_screen_button.pack(side="left")
         self.transcribe_button = tk.Button(
             self._response_toolbar_frame,
             text="Start listening",
@@ -684,7 +684,6 @@ class HelloWorldApp:
         self._opacity_frame.pack_forget()
         self._speech_pane.forget(self._speech_frame)
         self._response_provider_frame.pack_forget()
-        self._analyze_screen_button.pack_forget()
         self._response_status_label.pack_forget()
 
         width, height = 420, 260
@@ -696,7 +695,6 @@ class HelloWorldApp:
         self._opacity_frame.pack(fill="x", padx=10, pady=10, before=self._speech_pane)
         self._speech_pane.add(self._speech_frame, before=self._response_frame, minsize=300, stretch="always")
         self._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2), before=self._response_toolbar_frame)
-        self._analyze_screen_button.pack(padx=8, pady=(0, 4), before=self._response_toolbar_frame)
         self._response_status_label.pack(fill="x", padx=8, pady=(8, 4), before=self._response_toolbar_frame)
         self.root.geometry(getattr(self, "_pre_collapse_geometry", None) or self._expanded_geometry)
 

@@ -33,13 +33,13 @@ class ApplyUiModeTests(unittest.TestCase):
 
         app._response_provider_frame = tk.Frame(app._response_frame)
         app._response_provider_frame.pack(fill="x", padx=8, pady=(6, 2))
-        app._analyze_screen_button = tk.Button(app._response_frame, text="Analyze screen")
-        app._analyze_screen_button.pack(padx=8, pady=(0, 4))
         app._response_status_label = tk.Label(app._response_frame, text="status")
         app._response_status_label.pack(fill="x", padx=8, pady=(8, 4))
         app._response_toolbar_frame = tk.Frame(app._response_frame)
         app._response_toolbar_frame.pack(fill="x", padx=8, pady=(4, 0))
         tk.Button(app._response_toolbar_frame, text="Clear chat").pack(side="right")
+        app._analyze_screen_button = tk.Button(app._response_toolbar_frame, text="Analyze screen")
+        app._analyze_screen_button.pack(side="left")
         app.transcribe_button = tk.Button(app._response_toolbar_frame, text="Start listening")
         app.transcribe_button.pack(side="left")
         app.response_box = tk.Text(app._response_frame, height=12)
@@ -58,11 +58,11 @@ class ApplyUiModeTests(unittest.TestCase):
             self.assertFalse(app._opacity_frame.winfo_ismapped())
             self.assertFalse(app._speech_frame.winfo_ismapped())
             self.assertFalse(app._response_provider_frame.winfo_ismapped())
-            self.assertFalse(app._analyze_screen_button.winfo_ismapped())
             self.assertFalse(app._response_status_label.winfo_ismapped())
             self.assertTrue(app._response_toolbar_frame.winfo_ismapped())
             self.assertTrue(app.response_box.winfo_ismapped())
             self.assertTrue(app.transcribe_button.winfo_ismapped())
+            self.assertTrue(app._analyze_screen_button.winfo_ismapped())
 
             size_part = app.root.geometry().split("+")[0]
             self.assertEqual(size_part, "420x260")
