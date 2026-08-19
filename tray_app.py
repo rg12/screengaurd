@@ -520,7 +520,13 @@ class HelloWorldApp:
         self.is_transcribing = True
         self.stop_transcription_event = threading.Event()
         audio_chunks = queue.Queue(maxsize=64)
-        self.root.after(0, self._apply_ui_mode)
+        # Explicit "enter" rather than a live re-check of is_transcribing:
+        # if the connection fails fast (e.g. the audio device is still busy
+        # releasing from a just-stopped session), the background thread can
+        # flip is_transcribing back to False before this callback even runs,
+        # which would make a state-based check resolve to "exit" and never
+        # visibly collapse at all.
+        self.root.after(0, self._enter_output_only_view)
         self.root.after(0, lambda: self._set_speech_status(f"Connecting to {provider}..."))
         self.root.after(0, lambda: self.live_caption_var.set("Waiting for speech..."))
         target = self._run_live_transcription if provider == "Deepgram" else self._run_openai_transcription
@@ -696,17 +702,7 @@ class HelloWorldApp:
         self.stop_transcription_event = None
         self.live_caption_var.set("Live caption will appear here.")
         self._set_speech_status(failure_message or "Live transcription stopped.")
-        self._apply_ui_mode()
-
-    def _apply_ui_mode(self):
-        """Setup controls (audio/transcription/response provider, API
-        settings, live transcript) are only useful before you start; once
-        listening begins, collapse down to just the output box + Clear chat
-        so the overlay is as unobtrusive as possible during the call."""
-        if self.is_transcribing:
-            self._enter_output_only_view()
-        else:
-            self._exit_output_only_view()
+        self._exit_output_only_view()
 
     def _enter_output_only_view(self):
         self._pre_collapse_geometry = self.root.geometry()

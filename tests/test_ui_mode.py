@@ -91,18 +91,25 @@ class ApplyUiModeTests(unittest.TestCase):
         finally:
             app.root.destroy()
 
-    def test_apply_ui_mode_dispatches_on_is_transcribing(self):
+    def test_enter_output_only_view_is_unconditional(self):
+        """Regression test: _enter_output_only_view/_exit_output_only_view
+        used to be reached only through an _apply_ui_mode helper that did a
+        live re-check of is_transcribing. If a background thread flipped
+        is_transcribing back to False before that check ran (e.g. a
+        fast-failing reconnect attempt right after stopping), the check
+        would resolve to "exit" and the UI would never visibly collapse at
+        all. start_speech_to_text now calls _enter_output_only_view
+        directly and unconditionally, so it must collapse regardless of
+        is_transcribing's value at call time."""
         app = self._build_app()
         try:
-            app.is_transcribing = True
-            app._apply_ui_mode()
+            app.is_transcribing = False  # simulates the race having already reverted the flag
+            app._enter_output_only_view()
             app.root.update_idletasks()
-            self.assertFalse(app._status_label.winfo_ismapped())
 
-            app.is_transcribing = False
-            app._apply_ui_mode()
-            app.root.update_idletasks()
-            self.assertTrue(app._status_label.winfo_ismapped())
+            self.assertFalse(app._status_label.winfo_ismapped())
+            size_part = app.root.geometry().split("+")[0]
+            self.assertEqual(size_part, "420x260")
         finally:
             app.root.destroy()
 
