@@ -1,7 +1,7 @@
 # Background tray overlay with click-through, capture exclusion, and speech to text.
 #
 # Requirements:
-#     pip install pystray pillow keyboard sounddevice soundcard keyring websockets numpy anthropic openai google-genai sv_ttk
+#     pip install pystray pillow keyboard sounddevice soundcard keyring websockets numpy anthropic openai google-genai sv_ttk pypdf
 #
 # Run:
 #     pythonw tray_app.py
@@ -18,7 +18,7 @@ import time
 import warnings
 import tkinter as tk
 from pathlib import Path
-from tkinter import scrolledtext, ttk
+from tkinter import filedialog, scrolledtext, ttk
 from urllib.parse import urlencode
 from PIL import Image, ImageDraw, ImageGrab
 import pystray
@@ -34,6 +34,7 @@ from openai import OpenAI
 from google import genai
 import anthropic
 import sv_ttk  # pip install sv_ttk (modern Windows-11-style ttk theme)
+import pypdf  # pip install pypdf (PDF text extraction for resume context)
 
 # --- Light modern theme palette (Sun Valley "light") ---
 APP_BG = "#fafafa"
@@ -86,6 +87,30 @@ SCREEN_ANALYSIS_SYSTEM_PROMPT = (
     "You are looking at a screenshot of the user's screen. Describe what's on screen "
     "and, if there is a visible question or problem, answer it concisely."
 )
+RESUME_MAX_CHARS = 6000  # keeps one oversized resume from inflating every reply's token cost
+
+
+def _cap_resume_text(text, max_chars=RESUME_MAX_CHARS):
+    """Truncates text to at most max_chars, noting the original length if
+    it was cut, so a huge document can't silently balloon every request."""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + f"\n\n[resume truncated — original was {len(text)} characters]"
+
+
+def _extract_resume_text(file_path):
+    """Reads a .pdf or .txt resume file and returns its (capped) text.
+    Raises ValueError for unsupported extensions; propagates whatever
+    error the underlying reader raises for a corrupt/unreadable file."""
+    suffix = file_path.suffix.lower()
+    if suffix == ".txt":
+        text = file_path.read_text(encoding="utf-8", errors="replace")
+    elif suffix == ".pdf":
+        reader = pypdf.PdfReader(str(file_path))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    else:
+        raise ValueError(f"Unsupported resume file type: {suffix or '(no extension)'}")
+    return _cap_resume_text(text.strip())
 
 
 def _prepare_vision_image(image, max_edge=SCREEN_ANALYSIS_MAX_EDGE):
