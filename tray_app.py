@@ -227,6 +227,8 @@ class HelloWorldApp:
         self._protected_hwnds = set()  # combobox popdowns / dialogs that need their own capture exclusion
         self._anthropic_client = None
         self._anthropic_client_key = None
+        self.resume_context = ""
+        self._load_resume_context_from_disk()
 
         # tkinter has to be created and driven from its own thread's mainloop,
         # so we build the (initially hidden) window on the tkinter thread.
@@ -422,6 +424,34 @@ class HelloWorldApp:
         raw = self.root.winfo_id()
         hwnd = ctypes.windll.user32.GetAncestor(raw, GA_ROOT)
         return hwnd or raw
+
+    def _resume_context_path(self):
+        """Where the extracted resume text is cached between restarts —
+        not Windows Credential Manager, whose per-secret size limits are
+        too small for a full resume."""
+        return Path(__file__).resolve().parent / "resume_context.txt"
+
+    def _load_resume_context_from_disk(self):
+        path = self._resume_context_path()
+        if path.exists():
+            try:
+                self.resume_context = path.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                self.resume_context = ""
+        else:
+            self.resume_context = ""
+
+    def _apply_loaded_resume(self, text, source_name):
+        self.resume_context = text
+        self._resume_context_path().write_text(text, encoding="utf-8")
+        return f"Resume loaded: {len(text)} characters from {source_name}"
+
+    def _clear_resume_context(self):
+        self.resume_context = ""
+        path = self._resume_context_path()
+        if path.exists():
+            path.unlink()
+        return "No resume loaded"
 
     def _set_capture_protection(self, enabled=True, hwnd=None):
         """Excludes a window from screen capture/sharing APIs. Defaults to the
@@ -846,6 +876,20 @@ class HelloWorldApp:
         )
         return conversation
 
+    def _build_response_system_prompt(self):
+        if not self.resume_context:
+            return RESPONSE_SYSTEM_PROMPT
+        return (
+            f"{RESPONSE_SYSTEM_PROMPT}\n\n"
+            "The user's resume/CV is below. Draw on it naturally, in first person "
+            "(e.g. \"In my last role I...\"), only when the other person's question "
+            "is about the user's background, experience, or skills (e.g. \"tell me "
+            "about yourself\", \"what have you worked on\"). Never invent anything "
+            "not present in it, and don't force it into replies where it isn't "
+            "relevant.\n\n"
+            f"Resume:\n{self.resume_context}"
+        )
+
     def _generate_response_streaming(self, api_key, transcript):
         """Stream Claude's reply so words appear as they're generated instead of
         waiting for the full ~160-token response, cutting perceived latency."""
@@ -855,7 +899,7 @@ class HelloWorldApp:
         with client.messages.stream(
             model="claude-sonnet-5",
             max_tokens=160,
-            system=RESPONSE_SYSTEM_PROMPT,
+            system=self._build_response_system_prompt(),
             messages=conversation,
         ) as stream:
             for delta in stream.text_stream:
@@ -919,7 +963,7 @@ class HelloWorldApp:
         conversation_text = "\n".join(
             f"{message['role'].capitalize()}: {message['content']}" for message in conversation
         )
-        prompt = f"{RESPONSE_SYSTEM_PROMPT}\n\nRecent conversation:\n{conversation_text}"
+        prompt = f"{self._build_response_system_prompt()}\n\nRecent conversation:\n{conversation_text}"
 
         if provider == "Gemini":
             gemini_client = genai.Client(api_key=api_key)
@@ -934,7 +978,7 @@ class HelloWorldApp:
 
         result = OpenAI(api_key=api_key).responses.create(
             model="gpt-5-mini",
-            instructions=RESPONSE_SYSTEM_PROMPT,
+            instructions=self._build_response_system_prompt(),
             input=conversation_text,
             max_output_tokens=160,
         )
