@@ -453,6 +453,24 @@ class HelloWorldApp:
             path.unlink()
         return "No resume loaded"
 
+    def _load_resume_file(self, resume_status_var):
+        file_path = filedialog.askopenfilename(
+            title="Select resume",
+            filetypes=[("Resume files", "*.pdf *.txt")],
+        )
+        if not file_path:
+            return
+        path = Path(file_path)
+        try:
+            text = _extract_resume_text(path)
+        except Exception as error:
+            resume_status_var.set(f"Couldn't read resume: {error}")
+            return
+        resume_status_var.set(self._apply_loaded_resume(text, path.name))
+
+    def _clear_resume_file(self, resume_status_var):
+        resume_status_var.set(self._clear_resume_context())
+
     def _set_capture_protection(self, enabled=True, hwnd=None):
         """Excludes a window from screen capture/sharing APIs. Defaults to the
         main window, but accepts other top-level HWNDs (dropdown popdowns,
@@ -1113,6 +1131,33 @@ class HelloWorldApp:
         ttk.Label(form, text="Gemini API key").grid(row=3, column=0, sticky="w", pady=5)
         gemini_var = tk.StringVar()
         ttk.Entry(form, textvariable=gemini_var, show="*", width=38).grid(row=3, column=1, padx=(10, 0), pady=5)
+
+        ttk.Separator(dialog, orient="horizontal").pack(fill="x", padx=15, pady=(12, 8))
+
+        resume_frame = ttk.Frame(dialog)
+        resume_frame.pack(fill="x", padx=15)
+        resume_status_var = tk.StringVar(
+            value=(
+                f"Resume loaded: {len(self.resume_context)} characters"
+                if self.resume_context
+                else "No resume loaded"
+            )
+        )
+        ttk.Label(
+            resume_frame, textvariable=resume_status_var, foreground=MUTED_TEXT_COLOR, wraplength=390, justify="left"
+        ).pack(anchor="w")
+        resume_buttons_frame = ttk.Frame(resume_frame)
+        resume_buttons_frame.pack(fill="x", pady=(4, 0))
+        ttk.Button(
+            resume_buttons_frame,
+            text="Load resume...",
+            command=lambda: self._load_resume_file(resume_status_var),
+        ).pack(side="left")
+        ttk.Button(
+            resume_buttons_frame,
+            text="Clear resume",
+            command=lambda: self._clear_resume_file(resume_status_var),
+        ).pack(side="left", padx=(6, 0))
 
         status_var = tk.StringVar(value="Leave a field blank to keep its saved key unchanged.")
         ttk.Label(dialog, textvariable=status_var, foreground=MUTED_TEXT_COLOR, wraplength=390, justify="left").pack(

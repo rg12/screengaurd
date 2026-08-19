@@ -141,5 +141,73 @@ class BuildResponseSystemPromptTests(unittest.TestCase):
         self.assertIn("Built X at Y for 3 years.", result)
 
 
+class FakeStream:
+    def __init__(self, chunks):
+        self.text_stream = iter(chunks)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class FakeMessages:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def stream(self, **kwargs):
+        self.last_kwargs = kwargs
+        return FakeStream(self._chunks)
+
+
+class FakeAnthropicClient:
+    def __init__(self, chunks):
+        self.messages = FakeMessages(chunks)
+
+
+class ReplyPathsIncludeResumeTests(unittest.TestCase):
+    def _make_app(self):
+        tray_app = importlib.import_module("tray_app")
+        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
+        app.root = mock.Mock()
+        app.root.after.side_effect = lambda delay, fn: fn()
+        app.resume_context = "Resume snippet."
+        app.response_history = []
+        app._append_response_chunk = lambda chunk: None
+        app._end_response_chunk_stream = lambda: None
+        return tray_app, app
+
+    def test_generate_response_streaming_claude_includes_resume(self):
+        tray_app, app = self._make_app()
+        app._anthropic_client = FakeAnthropicClient(["ok"])
+        app._anthropic_client_key = "test-key"
+
+        app._generate_response_streaming("test-key", "Tell me about yourself")
+
+        self.assertIn("Resume snippet.", app._anthropic_client.messages.last_kwargs["system"])
+
+    def test_generate_response_gemini_includes_resume(self):
+        tray_app, app = self._make_app()
+        fake_client = mock.Mock()
+        fake_client.models.generate_content.return_value = mock.Mock(text="ok")
+        with mock.patch.object(tray_app.genai, "Client", return_value=fake_client):
+            app._generate_response("Gemini", "test-key", "Tell me about yourself")
+
+        _, kwargs = fake_client.models.generate_content.call_args
+        self.assertIn("Resume snippet.", kwargs["contents"])
+
+    def test_generate_response_gpt_includes_resume(self):
+        tray_app, app = self._make_app()
+        fake_responses = mock.Mock()
+        fake_responses.create.return_value = mock.Mock(output_text="ok")
+        fake_client = mock.Mock(responses=fake_responses)
+        with mock.patch.object(tray_app, "OpenAI", return_value=fake_client):
+            app._generate_response("GPT", "test-key", "Tell me about yourself")
+
+        _, kwargs = fake_responses.create.call_args
+        self.assertIn("Resume snippet.", kwargs["instructions"])
+
+
 if __name__ == "__main__":
     unittest.main()
