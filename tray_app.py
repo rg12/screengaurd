@@ -818,6 +818,19 @@ class HelloWorldApp:
 
         self.response_history = []
 
+    def _enqueue_latest(self, q, job):
+        """Drops any not-yet-started items before adding the new one, so a
+        worker pulling from this queue always answers the most recently
+        enqueued job instead of working through a stale backlog. Only
+        affects items still waiting — anything a worker has already
+        dequeued (in flight) is untouched."""
+        while True:
+            try:
+                q.get_nowait()
+            except queue.Empty:
+                break
+        q.put(job)
+
     def _add_transcript(self, transcript):
         self.transcript_box.configure(state="normal")
         self.transcript_box.insert("end", transcript + "\n")
