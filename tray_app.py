@@ -223,6 +223,7 @@ class HelloWorldApp:
         self.response_provider = "Claude"
         self.stop_transcription_event = None
         self.response_queue = queue.Queue()
+        self.screen_analysis_queue = queue.Queue()
         self.response_history = []
         self._protected_hwnds = set()  # combobox popdowns / dialogs that need their own capture exclusion
         self._anthropic_client = None
@@ -417,6 +418,7 @@ class HelloWorldApp:
 
         self._start_hotkey_listener()
         threading.Thread(target=self._response_worker, daemon=True).start()
+        threading.Thread(target=self._screen_analysis_worker, daemon=True).start()
         self.root.mainloop()
 
     def _get_hwnd(self):
@@ -498,7 +500,7 @@ class HelloWorldApp:
         except Exception as error:
             self._set_response_status(f"Screen capture error: {error}")
             return
-        self.response_queue.put({"type": "image", "data": image_b64})
+        self._enqueue_latest(self.screen_analysis_queue, {"type": "image", "data": image_b64})
         self._set_response_status("Analyzing screen...")
 
     def _hwnd_from_widget(self, widget):
@@ -836,21 +838,15 @@ class HelloWorldApp:
         self.transcript_box.insert("end", transcript + "\n")
         self.transcript_box.see("end")
         self.transcript_box.configure(state="disabled")
-        self.response_queue.put(transcript)
+        self._enqueue_latest(self.response_queue, transcript)
 
     def _response_worker(self):
-        """Turn each finalized utterance into a concise English suggested
-        reply, or (for image jobs) a screen analysis."""
+        """Turn each finalized utterance into a concise English suggested reply."""
         while True:
-            job = self.response_queue.get()
-            if job is None:
+            transcript = self.response_queue.get()
+            if transcript is None:
                 return
 
-            if isinstance(job, dict) and job.get("type") == "image":
-                self._handle_screen_analysis_job(job["data"])
-                continue
-
-            transcript = job
             provider = self.response_provider
             key_name = {
                 "Claude": ANTHROPIC_KEY_NAME,
@@ -988,6 +984,16 @@ class HelloWorldApp:
             self.root.after(0, lambda: self._set_response_status("Ready for the next sentence."))
         except Exception as error:
             self.root.after(0, lambda message=str(error): self._set_response_status(f"Response error: {message}"))
+
+    def _screen_analysis_worker(self):
+        """Mirrors _response_worker's shape but for screen-analysis jobs,
+        on its own queue/thread so it's never delayed by (or delays)
+        pending transcript replies."""
+        while True:
+            job = self.screen_analysis_queue.get()
+            if job is None:
+                return
+            self._handle_screen_analysis_job(job["data"])
 
     def _generate_response(self, provider, api_key, transcript):
         conversation = self._build_conversation(transcript)

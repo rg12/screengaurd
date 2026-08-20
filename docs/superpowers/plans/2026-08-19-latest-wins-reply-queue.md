@@ -210,6 +210,7 @@ class ResponseWorkerLatestWinsTests(unittest.TestCase):
         app.response_history = []
         app.root = mock.Mock()
         app.root.after.side_effect = lambda delay, fn: fn()
+        app._set_response_status = lambda message: None
         processed = []
 
         def slow_reply(api_key, transcript):

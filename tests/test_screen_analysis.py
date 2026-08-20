@@ -36,6 +36,7 @@ class TriggerScreenAnalysisTests(unittest.TestCase):
         tray_app = importlib.import_module("tray_app")
         app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
         app.response_queue = queue.Queue()
+        app.screen_analysis_queue = queue.Queue()
         app.root = mock.Mock()
         app.root.after.side_effect = lambda delay, fn: fn()
         return tray_app, app
@@ -49,7 +50,7 @@ class TriggerScreenAnalysisTests(unittest.TestCase):
         with mock.patch.object(tray_app.ImageGrab, "grab", return_value=fake_screenshot):
             app.trigger_screen_analysis()
 
-        job = app.response_queue.get_nowait()
+        job = app.screen_analysis_queue.get_nowait()
         self.assertEqual(job["type"], "image")
         decoded = base64.b64decode(job["data"])
         self.assertTrue(decoded.startswith(b"\x89PNG"))
@@ -63,7 +64,7 @@ class TriggerScreenAnalysisTests(unittest.TestCase):
         with mock.patch.object(tray_app.ImageGrab, "grab", side_effect=RuntimeError("boom")):
             app.trigger_screen_analysis()
 
-        self.assertTrue(app.response_queue.empty())
+        self.assertTrue(app.screen_analysis_queue.empty())
         self.assertIn("Screen capture error", statuses[-1])
 
 
@@ -143,21 +144,6 @@ class HandleScreenAnalysisJobTests(unittest.TestCase):
         self.assertEqual(chunks[0], "[Screen] ")
         app._generate_screen_analysis.assert_called_once_with("test-key", "base64data")
         self.assertIn("Ready for the next sentence", statuses[-1])
-
-
-class ResponseWorkerDispatchTests(unittest.TestCase):
-    def test_dispatches_image_job_to_handler_and_stops_on_none(self):
-        tray_app = importlib.import_module("tray_app")
-        app = tray_app.HelloWorldApp.__new__(tray_app.HelloWorldApp)
-        app.response_queue = queue.Queue()
-        handled = []
-        app._handle_screen_analysis_job = handled.append
-        app.response_queue.put({"type": "image", "data": "abc"})
-        app.response_queue.put(None)
-
-        app._response_worker()
-
-        self.assertEqual(handled, ["abc"])
 
 
 class ClearChatTests(unittest.TestCase):
