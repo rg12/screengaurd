@@ -1118,7 +1118,7 @@ class HelloWorldApp:
         dialog = tk.Toplevel(self.root)
         self.settings_window = dialog
         dialog.title("API Settings")
-        dialog.geometry("420x350")
+        dialog.geometry("420x1")  # placeholder height, fitted to content once everything is packed below
         dialog.configure(bg=APP_BG)
         dialog.resizable(False, False)
         dialog.transient(self.root)
@@ -1191,6 +1191,13 @@ class HelloWorldApp:
             ),
         )
         self.settings_save_button.pack(pady=8)
+
+        # Fixed width, height fitted to whatever ended up packed above (the
+        # dialog is non-resizable, so if content grows — e.g. the resume
+        # section — and this isn't re-fitted, the bottom of the dialog,
+        # including the Save button, gets silently clipped off-window).
+        dialog.update_idletasks()
+        dialog.geometry(f"420x{dialog.winfo_reqheight()}")
 
     def _validate_and_save_api_keys(self, deepgram_var, anthropic_var, openai_var, gemini_var, status_var):
         keys = {
