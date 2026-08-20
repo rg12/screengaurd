@@ -59,7 +59,7 @@ class ApplyUiModeTests(unittest.TestCase):
             self.assertFalse(app._opacity_frame.winfo_ismapped())
             self.assertFalse(app._speech_frame.winfo_ismapped())
             self.assertFalse(app._response_provider_frame.winfo_ismapped())
-            self.assertFalse(app._response_status_label.winfo_ismapped())
+            self.assertTrue(app._response_status_label.winfo_ismapped())
             self.assertTrue(app._response_toolbar_frame.winfo_ismapped())
             self.assertTrue(app.response_box.winfo_ismapped())
             self.assertTrue(app.transcribe_button.winfo_ismapped())

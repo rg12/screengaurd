@@ -785,7 +785,6 @@ class HelloWorldApp:
         self._opacity_frame.pack_forget()
         self._speech_pane.forget(self._speech_frame)
         self._response_provider_frame.pack_forget()
-        self._response_status_label.pack_forget()
 
         width, height = 420, 260
         x = (self.root.winfo_screenwidth() - width) // 2
